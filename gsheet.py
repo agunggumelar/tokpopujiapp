@@ -1,28 +1,28 @@
+import streamlit as st
 import gspread
-from oauth2client.service_account import ServiceAccountCredentials
+from google.oauth2.service_account import Credentials
 import pandas as pd
 
+SCOPE = [
+    "https://www.googleapis.com/auth/spreadsheets",
+    "https://www.googleapis.com/auth/drive"
+]
+
 def connect_sheet():
-    scope = [
-        "https://spreadsheets.google.com/feeds",
-        "https://www.googleapis.com/auth/drive"
-    ]
-
-    creds = ServiceAccountCredentials.from_json_keyfile_name(
-        "service_account.json", scope
+    creds = Credentials.from_service_account_info(
+        st.secrets["gcp_service_account"],
+        scopes=SCOPE
     )
-    client = gspread.authorize(creds)
 
-    sheet = client.open("DaftarProductTokoPuji")
-    return sheet
+    client = gspread.authorize(creds)
+    return client.open(st.secrets["spreadsheet_name"])
 
 
 def read_sheet(sheet_name):
-    sheet = connect_sheet().worksheet(sheet_name)
-    data = sheet.get_all_records()
-    return pd.DataFrame(data)
+    ws = connect_sheet().worksheet(sheet_name)
+    return pd.DataFrame(ws.get_all_records())
 
 
 def append_sheet(sheet_name, row):
-    sheet = connect_sheet().worksheet(sheet_name)
-    sheet.append_row(row)
+    ws = connect_sheet().worksheet(sheet_name)
+    ws.append_row(row, value_input_option="USER_ENTERED")
