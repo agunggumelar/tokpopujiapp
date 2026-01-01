@@ -1,0 +1,99 @@
+import streamlit as st
+import pandas as pd
+from datetime import datetime
+from gsheet import read_sheet, append_sheet
+
+st.set_page_config(page_title="TokoPuji App", layout="wide")
+
+menu = st.sidebar.selectbox(
+    "Menu",
+    ["Daftar_Produk", "Stok_Masuk", "Stok_Keluar"]
+)
+
+# ================= PRODUK =================
+if menu == "Daftar_Produk":
+    st.title("📦 Data Produk")
+    # Tab untuk input berbeda
+    tab1, tab2 = st.tabs(["Data Table", "Form Produk"])
+    with tab1:
+        df_produk = read_sheet("Daftar_Produk")
+        st.dataframe(df_produk, use_container_width=True)
+    with tab2:
+        with st.form("form_produk"):
+            nama = st.text_input("Nama Barang")
+            kategori = st.text_input("Kategori")
+            harga_jual = st.number_input("Harga Jual", 0)
+            harga_beli = st.number_input("Harga Beli", 0)
+            harga_jual_kembali = st.number_input("Harga utk Jual Kembali", 0)
+            satuan = st.text_input("Satuan")
+            keterangan = st.text_input("Keterangan")
+            supplier = st.text_input("Supplier")
+
+            submit = st.form_submit_button("Simpan")
+
+            if submit:
+                append_sheet("Daftar_Produk", [
+                    "","",nama, kategori, harga_jual, harga_beli, harga_jual_kembali, satuan, keterangan, supplier, ""
+                ])
+                st.success("Produk berhasil ditambahkan")
+                st.rerun()
+
+# ================= STOK MASUK =================
+elif menu == "Stok_Masuk":
+    st.title("➕ Stok Masuk")
+
+    df_produk = read_sheet("Daftar_Produk")
+
+    with st.form("form_masuk"):
+        produk = st.selectbox(
+            "Pilih Produk",
+            df_produk["Nama Barang"]
+        )
+
+        qty = st.number_input("Jumlah", 1)
+        supplier = st.text_input("Supplier")
+
+        submit = st.form_submit_button("Simpan")
+
+        if submit:
+            row_produk = df_produk[df_produk["Nama Barang"] == produk].iloc[0]
+
+            append_sheet("Stok_Masuk", [
+                datetime.now().strftime("%Y-%m-%d"),
+                row_produk["Kode Barang"],
+                produk,
+                qty,
+                supplier
+            ])
+            st.success("Stok masuk dicatat")
+            st.rerun()
+
+# ================= STOK KELUAR =================
+elif menu == "Stok_Keluar":
+    st.title("➖ Stok Keluar")
+
+    df_produk = read_sheet("Daftar_Produk")
+
+    with st.form("form_keluar"):
+        produk = st.selectbox(
+            "Pilih Produk",
+            df_produk["Nama Barang"]
+        )
+
+        qty = st.number_input("Jumlah", 1)
+        ket = st.text_input("Keterangan")
+
+        submit = st.form_submit_button("Simpan")
+
+        if submit:
+            row_produk = df_produk[df_produk["Nama Barang"] == produk].iloc[0]
+
+            append_sheet("Stok_Keluar", [
+                datetime.now().strftime("%Y-%m-%d"),
+                row_produk["Kode Barang"],
+                produk,
+                qty,
+                ket
+            ])
+            st.success("Stok keluar dicatat")
+            st.rerun()
