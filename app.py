@@ -17,7 +17,26 @@ if menu == "Daftar_Produk":
     tab1, tab2 = st.tabs(["Data Table", "Form Produk"])
     with tab1:
         df_produk = read_sheet("Daftar_Produk")
-        st.dataframe(df_produk, use_container_width=True)
+        
+    st.dataframe(
+        df_produk[
+            [
+                "Kode Barang",
+                "Nama Barang",
+                "Kategori",
+                "Harga Jual",
+                "Harga Beli",
+                "Harga utk Jual Kembali",
+                "Satuan",
+                "Total Masuk",
+                "Total Keluar",
+                "Stock Akhir",
+                "Keterangan",
+                "Supplier"
+            ]
+        ],
+        use_container_width=True
+    )
     with tab2:
         with st.form("form_produk"):
             nama = st.text_input("Nama Barang")
