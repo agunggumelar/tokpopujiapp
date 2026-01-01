@@ -15,7 +15,7 @@ def connect_sheet():
     )
 
     client = gspread.authorize(creds)
-    return client.open(st.secrets["spreadsheet_name"])
+    return client.open(st.secrets["DaftarProductTokoPuji"])
 
 
 def read_sheet(sheet_name):
