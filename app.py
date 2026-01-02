@@ -24,18 +24,19 @@ if menu == "Daftar_Produk":
                 "Kode Barang",
                 "Nama Barang",
                 "Kategori",
+                "Total Masuk",
+                "Total Keluar",
+                "Stock Akhir",
                 "Harga Jual",
                 "Harga Beli",
                 "Harga utk Jual Kembali",
                 "Satuan",
-                "Total Masuk",
-                "Total Keluar",
-                "Stock Akhir",
                 "Keterangan",
                 "Supplier"
             ]
         ],
-        use_container_width=True
+        use_container_width=True,
+        height=600 
     )
     with tab2:
         with st.form("form_produk"):
