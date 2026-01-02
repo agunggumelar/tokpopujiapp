@@ -25,7 +25,7 @@ st.title("➕ Stok Masuk")
 df_produk = read_sheet("Daftar_Produk")
 
 # ✅ checkbox stock opname
-is_opname = st.checkbox("Stock Opname / Inisialisasi")
+is_opname = st.checkbox("Stock Opname / Inisialisasi",value=True)
 
 with st.form("form_masuk"):
     produk = st.selectbox(
@@ -61,7 +61,8 @@ with st.form("form_masuk"):
             qty,
             lokasi,
             supplier if not is_opname else "",
-            keterangan
+            keterangan,
+            st.session_state["user"] 
         ])
         st.success("Stok masuk dicatat")
         st.rerun()

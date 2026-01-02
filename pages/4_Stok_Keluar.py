@@ -82,7 +82,8 @@ with st.form("form_keluar"):
             produk,
             qty,
             lokasi,
-            ket if ket else "Dikirim ke Toko"
+            ket if ket else "Dikirim ke Toko",
+            st.session_state["user"] 
         ])
 
         # ➕ AUTO STOK MASUK KE TOKO
@@ -94,7 +95,8 @@ with st.form("form_keluar"):
                 qty,
                 "Toko",
                 "",  # supplier kosong
-                "Dikirim dari Gudang"
+                "Dikirim dari Gudang",
+                st.session_state["user"] 
             ])
 
         st.success("Stok keluar dicatat")
