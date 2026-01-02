@@ -2,161 +2,121 @@ import streamlit as st
 import pandas as pd
 from datetime import datetime
 from gsheet import read_sheet, append_sheet
+from session import init_session
 
+init_session()
+    
 st.set_page_config(page_title="TokoPuji App", layout="wide")
 
-menu = st.sidebar.selectbox(
-    "Menu",
-    ["Daftar_Produk", "Stok_Masuk", "Stok_Keluar"]
+if st.session_state["login"]:
+    st.sidebar.write(
+        f"👤 {st.session_state['user']} ({st.session_state['role']})"
+    )
+
+if st.session_state["login"]:
+    if st.sidebar.button("Logout"):
+        st.session_state.clear()
+        st.switch_page("pages/1_Login.py")
+
+def normalize_text(x):
+    if pd.isna(x):
+        return ""
+    return (
+        str(x)
+        .lower()
+        .strip()
+        .replace(" ", "")
+    )
+    
+st.title("📦 Data Produk")
+df_produk = read_sheet("Daftar_Produk")
+
+cols = [
+    "Kode Barang",
+    "Nama Barang",
+    "Kategori",
+    "Stock Gudang",
+    "Stock Toko",
+    "Stock Akhir",
+    "Harga Jual",
+    "Harga Beli",
+    "Harga utk Jual Kembali",
+    "Satuan",
+    "Keterangan",
+    "Supplier"
+]
+
+df_view = df_produk[cols].copy()
+
+# pastikan stok numeric
+stok_cols = ["Stock Gudang", "Stock Toko", "Stock Akhir"]
+df_view[stok_cols] = df_view[stok_cols].apply(pd.to_numeric, errors="coerce").fillna(0)
+
+# kolom indikator stok rendah
+df_view["⚠️ Stok Rendah"] = (
+    (df_view["Stock Akhir"] < 5)
 )
 
-# ================= PRODUK =================
-if menu == "Daftar_Produk":
-    st.title("📦 Data Produk")
-    # Tab untuk input berbeda
-    tab1, tab2 = st.tabs(["Data Table", "Form Produk"])
-    with tab1:
-        df_produk = read_sheet("Daftar_Produk")
-        
-        cols = [
-            "Kode Barang",
-            "Nama Barang",
-            "Kategori",
-            "Stock Gudang",
-            "Stock Toko",
-            "Stock Akhir",
-            "Harga Jual",
-            "Harga Beli",
-            "Harga utk Jual Kembali",
-            "Satuan",
-            "Keterangan",
-            "Supplier"
-        ]
+# 🔁 atur ulang urutan kolom (sisipkan setelah Stock Akhir)
+new_order = [
+    "Kode Barang",
+    "Nama Barang",
+    "Kategori",
+    "Stock Gudang",
+    "Stock Toko",
+    "Stock Akhir",
+    "⚠️ Stok Rendah",   # ← DI SINI
+    "Harga Jual",
+    "Harga Beli",
+    "Harga utk Jual Kembali",
+    "Satuan",
+    "Keterangan",
+    "Supplier"
+]
 
-        df_view = df_produk[cols].copy()
+df_view = df_view[new_order]
 
-        # pastikan stok numeric
-        stok_cols = ["Stock Gudang", "Stock Toko", "Stock Akhir"]
-        df_view[stok_cols] = df_view[stok_cols].apply(pd.to_numeric, errors="coerce").fillna(0)
+# sort stok bermasalah ke atas
+df_view = df_view.sort_values("⚠️ Stok Rendah", ascending=False)
+df_view["Kategori_norm"] = df_view["Kategori"].apply(normalize_text)
 
-        # kolom indikator stok rendah
-        df_view["⚠️ Stok Rendah"] = (
-            (df_view["Stock Akhir"] < 5)
-        )
-        
-        # 🔁 atur ulang urutan kolom (sisipkan setelah Stock Akhir)
-        new_order = [
-            "Kode Barang",
-            "Nama Barang",
-            "Kategori",
-            "Stock Gudang",
-            "Stock Toko",
-            "Stock Akhir",
-            "⚠️ Stok Rendah",   # ← DI SINI
-            "Harga Jual",
-            "Harga Beli",
-            "Harga utk Jual Kembali",
-            "Satuan",
-            "Keterangan",
-            "Supplier"
-        ]
+# mapping norm → display (ambil versi pertama yang ketemu)
+kategori_map = (
+    df_view
+    .dropna(subset=["Kategori_norm"])
+    .drop_duplicates("Kategori_norm")
+    .set_index("Kategori_norm")["Kategori"]
+    .to_dict()
+)
 
-        df_view = df_view[new_order]
+kategori_options = ["Semua"] + list(kategori_map.values())
 
-        # sort stok bermasalah ke atas
-        df_view = df_view.sort_values("⚠️ Stok Rendah", ascending=False)
+kategori_filter = st.selectbox(
+    "Filter Kategori",
+    kategori_options
+)
 
-        st.dataframe(
-            df_view,
-            use_container_width=True,
-            height=600
-        )
-    with tab2:
-        with st.form("form_produk"):
-            nama = st.text_input("Nama Barang")
-            kategori = st.text_input("Kategori")
-            harga_jual = st.number_input("Harga Jual", 0)
-            harga_beli = st.number_input("Harga Beli", 0)
-            harga_jual_kembali = st.number_input("Harga utk Jual Kembali", 0)
-            satuan = st.text_input("Satuan")
-            keterangan = st.text_input("Keterangan")
-            supplier = st.text_input("Supplier")
-
-            submit = st.form_submit_button("Simpan")
-
-            if submit:
-                append_sheet("Daftar_Produk", [
-                    "","",nama, kategori, harga_jual, harga_beli, harga_jual_kembali, satuan, keterangan, supplier, ""
-                ])
-                st.success("Produk berhasil ditambahkan")
-                st.rerun()
-
-# ================= STOK MASUK =================
-elif menu == "Stok_Masuk":
-    st.title("➕ Stok Masuk")
-
-    df_produk = read_sheet("Daftar_Produk")
-
-    with st.form("form_masuk"):
-        produk = st.selectbox(
-            "Pilih Produk",
-            df_produk["Nama Barang"]
-        )
-
-        qty = st.number_input("Jumlah", 1)
-        lokasi = st.selectbox(
-            "Lokasi",
-            ["Toko", "Gudang"]
-        )
-        supplier = st.text_input("Supplier")
-
-        submit = st.form_submit_button("Simpan")
-
-        if submit:
-            row_produk = df_produk[df_produk["Nama Barang"] == produk].iloc[0]
-
-            append_sheet("Stok_Masuk", [
-                datetime.now().strftime("%Y-%m-%d"),
-                row_produk["Kode Barang"],
-                produk,
-                qty,
-                lokasi,
-                supplier
-            ])
-            st.success("Stok masuk dicatat")
-            st.rerun()
-
-# ================= STOK KELUAR =================
-elif menu == "Stok_Keluar":
-    st.title("➖ Stok Keluar")
-
-    df_produk = read_sheet("Daftar_Produk")
-
-    with st.form("form_keluar"):
-        produk = st.selectbox(
-            "Pilih Produk",
-            df_produk["Nama Barang"]
-        )
-
-        qty = st.number_input("Jumlah", 1)
-        lokasi = st.selectbox(
-            "Lokasi",
-            ["Toko", "Gudang"]
-        )
-        ket = st.text_input("Keterangan")
-
-        submit = st.form_submit_button("Simpan")
-
-        if submit:
-            row_produk = df_produk[df_produk["Nama Barang"] == produk].iloc[0]
-
-            append_sheet("Stok_Keluar", [
-                datetime.now().strftime("%Y-%m-%d"),
-                row_produk["Kode Barang"],
-                produk,
-                qty,
-                lokasi,
-                ket
-            ])
-            st.success("Stok keluar dicatat")
-            st.rerun()
+if kategori_filter != "Semua":
+    # cari key norm dari value display
+    selected_norm = next(
+        k for k, v in kategori_map.items()
+        if v == kategori_filter
+    )
+    
+    df_view = df_view[
+        df_view["Kategori_norm"] == selected_norm
+    ]
+    
+df_view["Kategori"] = (
+    df_view["Kategori"]
+    .str.strip()
+    .str.title()
+)
+st.metric(
+    label="📦 Total Produk",
+    value=len(df_view)
+)
+st.dataframe(
+    df_view,
+    use_container_width=True
+)
