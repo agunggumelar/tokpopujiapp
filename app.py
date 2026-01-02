@@ -18,26 +18,59 @@ if menu == "Daftar_Produk":
     with tab1:
         df_produk = read_sheet("Daftar_Produk")
         
-    st.dataframe(
-        df_produk[
-            [
-                "Kode Barang",
-                "Nama Barang",
-                "Kategori",
-                "Total Masuk",
-                "Total Keluar",
-                "Stock Akhir",
-                "Harga Jual",
-                "Harga Beli",
-                "Harga utk Jual Kembali",
-                "Satuan",
-                "Keterangan",
-                "Supplier"
-            ]
-        ],
-        use_container_width=True,
-        height=600 
-    )
+        cols = [
+            "Kode Barang",
+            "Nama Barang",
+            "Kategori",
+            "Stock Gudang",
+            "Stock Toko",
+            "Stock Akhir",
+            "Harga Jual",
+            "Harga Beli",
+            "Harga utk Jual Kembali",
+            "Satuan",
+            "Keterangan",
+            "Supplier"
+        ]
+
+        df_view = df_produk[cols].copy()
+
+        # pastikan stok numeric
+        stok_cols = ["Stock Gudang", "Stock Toko", "Stock Akhir"]
+        df_view[stok_cols] = df_view[stok_cols].apply(pd.to_numeric, errors="coerce").fillna(0)
+
+        # kolom indikator stok rendah
+        df_view["⚠️ Stok Rendah"] = (
+            (df_view["Stock Akhir"] < 5)
+        )
+        
+        # 🔁 atur ulang urutan kolom (sisipkan setelah Stock Akhir)
+        new_order = [
+            "Kode Barang",
+            "Nama Barang",
+            "Kategori",
+            "Stock Gudang",
+            "Stock Toko",
+            "Stock Akhir",
+            "⚠️ Stok Rendah",   # ← DI SINI
+            "Harga Jual",
+            "Harga Beli",
+            "Harga utk Jual Kembali",
+            "Satuan",
+            "Keterangan",
+            "Supplier"
+        ]
+
+        df_view = df_view[new_order]
+
+        # sort stok bermasalah ke atas
+        df_view = df_view.sort_values("⚠️ Stok Rendah", ascending=False)
+
+        st.dataframe(
+            df_view,
+            use_container_width=True,
+            height=600
+        )
     with tab2:
         with st.form("form_produk"):
             nama = st.text_input("Nama Barang")
@@ -71,6 +104,10 @@ elif menu == "Stok_Masuk":
         )
 
         qty = st.number_input("Jumlah", 1)
+        lokasi = st.selectbox(
+            "Lokasi",
+            ["Toko", "Gudang"]
+        )
         supplier = st.text_input("Supplier")
 
         submit = st.form_submit_button("Simpan")
@@ -83,6 +120,7 @@ elif menu == "Stok_Masuk":
                 row_produk["Kode Barang"],
                 produk,
                 qty,
+                lokasi,
                 supplier
             ])
             st.success("Stok masuk dicatat")
@@ -101,6 +139,10 @@ elif menu == "Stok_Keluar":
         )
 
         qty = st.number_input("Jumlah", 1)
+        lokasi = st.selectbox(
+            "Lokasi",
+            ["Toko", "Gudang"]
+        )
         ket = st.text_input("Keterangan")
 
         submit = st.form_submit_button("Simpan")
@@ -113,6 +155,7 @@ elif menu == "Stok_Keluar":
                 row_produk["Kode Barang"],
                 produk,
                 qty,
+                lokasi,
                 ket
             ])
             st.success("Stok keluar dicatat")
