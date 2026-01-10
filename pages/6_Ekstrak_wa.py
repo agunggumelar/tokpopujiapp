@@ -3,7 +3,29 @@ import pandas as pd
 import re
 from io import BytesIO
 from datetime import datetime
+import os
+from pathlib import Path
 
+BASE_DIR = Path(__file__).resolve().parent.parent
+CHAT_FILE_PATH = BASE_DIR / "data" / "chat_wa_tokopuji.txt"
+
+
+if not st.session_state.get("login"):
+    st.switch_page("pages/1_Login.py")
+    
+if st.session_state["login"]:
+    st.sidebar.write(
+        f"👤 {st.session_state['user']} ({st.session_state['role']})"
+    )
+
+if st.session_state["login"]:
+    if st.sidebar.button("Logout"):
+        st.session_state.clear()
+        st.switch_page("pages/1_Login.py")
+
+if st.session_state["role"] not in ["admin"]:
+    st.error("Akses ditolak")
+    st.stop()
 # =========================
 # CONFIG
 # =========================
@@ -13,6 +35,8 @@ st.title("📦 Ekstraksi Data Barang dari Chat WhatsApp")
 # =========================
 # HELPER
 # =========================
+
+
 def format_rupiah(x):
     return f"Rp {x:,.0f}".replace(",", ".")
 
@@ -31,320 +55,312 @@ def extract_nama_produk_log(pesan):
 
     return pesan.strip().title()
 
-# =========================
-# UPLOAD FILE
-# =========================
-uploaded_file = st.file_uploader(
-    "Upload file chat WhatsApp (.txt)",
-    type=["txt"]
-)
+if not os.path.exists(CHAT_FILE_PATH):
+    st.error("❌ File chat WhatsApp tidak ditemukan")
+    st.stop()
+    
+with open(CHAT_FILE_PATH, "r", encoding="utf-8", errors="ignore") as f:
+    content = f.read()
+    lines = content.splitlines()
 
-# =========================
-# MAIN
-# =========================
-if uploaded_file:
-    with st.spinner("⏳ Memproses chat WhatsApp..."):
-        content = uploaded_file.read().decode("utf-8", errors="ignore")
-        lines = content.splitlines()
+    # =========================
+    # DATA PRODUK
+    # =========================
+    data = []
 
-        # =========================
-        # DATA PRODUK
-        # =========================
-        data = []
-
-        for line in lines:
-            # skip cepat kalau ga ada harga
-            if "rb" not in line.lower():
-                continue
-
-            # =========================
-            # TANGGAL
-            # =========================
-            date_match = re.search(r'(\d{2}/\d{2}/\d{2})', line)
-            if not date_match:
-                continue
-
-            tanggal = datetime.strptime(
-                date_match.group(1), "%d/%m/%y"
-            ).date()
-
-            # =========================
-            # PESAN
-            # =========================
-            if ":" not in line:
-                continue
-            pesan = line.split(":", 1)[1].lower()
-
-            # =========================
-            # NAMA PRODUK (AMAN)
-            # =========================
-            nama_produk = pesan
-
-            # hapus kata jualan umum
-            nama_produk = re.sub(
-                r'\b(jual|harga|hrg|ecer|dus|ds|pk|pcs|isi|kalau|dihitung|u jual)\b',
-                '',
-                nama_produk
-            )
-
-            # hapus varian & harga di belakang
-            nama_produk = re.sub(
-                r'(\d+\s?(g|kg|ml|l)|\d+\s*rb).*',
-                '',
-                nama_produk
-            )
-
-            nama_produk = nama_produk.strip()
-            if len(nama_produk) < 2:
-                continue
-
-            # =========================
-            # VARIAN + HARGA
-            # =========================
-            pairs = re.findall(
-                r'(\d+\s?(?:g|kg|ml|l))\s+(\d+)\s*rb',
-                pesan
-            )
-
-            # fallback: harga tanpa varian
-            if not pairs:
-                prices = re.findall(r'(\d+)\s*rb', pesan)
-                pairs = [("unknown", p) for p in prices]
-
-            # =========================
-            # SIMPAN DATA
-            # =========================
-            for varian, harga in pairs:
-                tipe = "unknown"
-
-                if "ecer" in pesan:
-                    tipe = "ecer"
-                if any(x in pesan for x in ["ds", "dus", "pk"]):
-                    tipe = "dus"
-
-                data.append({
-                    "tanggal": tanggal,
-                    "nama_produk": nama_produk.title(),
-                    "varian": varian.replace(" ", ""),
-                    "tipe_harga": tipe,
-                    "harga": int(harga) * 1000
-                })
+    for line in lines:
+        # skip cepat kalau ga ada harga
+        if "rb" not in line.lower():
+            continue
 
         # =========================
-        # LOG CHAT UPDATE HARGA
+        # TANGGAL
         # =========================
-        log_data = []
+        date_match = re.search(r'(\d{2}/\d{2}/\d{2})', line)
+        if not date_match:
+            continue
 
-        for line in lines:
-            if "rb" not in line.lower():
-                continue
+        tanggal = datetime.strptime(
+            date_match.group(1), "%d/%m/%y"
+        ).date()
 
-            if " - " not in line or ":" not in line:
-                continue
+        # =========================
+        # PESAN
+        # =========================
+        if ":" not in line:
+            continue
+        pesan = line.split(":", 1)[1].lower()
 
-            date_match = re.search(r'(\d{2}/\d{2}/\d{2})', line)
-            if not date_match:
-                continue
+        # =========================
+        # NAMA PRODUK (AMAN)
+        # =========================
+        nama_produk = pesan
 
-            tanggal = datetime.strptime(
-                date_match.group(1), "%d/%m/%y"
-            ).date()
+        # hapus kata jualan umum
+        nama_produk = re.sub(
+            r'\b(jual|harga|hrg|ecer|dus|ds|pk|pcs|isi|kalau|dihitung|u jual)\b',
+            '',
+            nama_produk
+        )
 
-            header, pesan = line.split(":", 1)
-            pengirim = header.split(" - ")[1].strip()
-            pesan_lower = pesan.lower()
+        # hapus varian & harga di belakang
+        nama_produk = re.sub(
+            r'(\d+\s?(g|kg|ml|l)|\d+\s*rb).*',
+            '',
+            nama_produk
+        )
 
-            prices = re.findall(r'\d+\s*rb', pesan_lower)
-            indikasi_jual = any(
-                k in pesan_lower for k in ["jual", "harga", "hrg"]
-            )
+        nama_produk = nama_produk.strip()
+        if len(nama_produk) < 2:
+            continue
 
-            if not prices or not indikasi_jual:
-                continue
+        # =========================
+        # VARIAN + HARGA
+        # =========================
+        pairs = re.findall(
+            r'(\d+\s?(?:g|kg|ml|l))\s+(\d+)\s*rb',
+            pesan
+        )
 
-            log_data.append({
+        # fallback: harga tanpa varian
+        if not pairs:
+            prices = re.findall(r'(\d+)\s*rb', pesan)
+            pairs = [("unknown", p) for p in prices]
+
+        # =========================
+        # SIMPAN DATA
+        # =========================
+        for varian, harga in pairs:
+            tipe = "unknown"
+
+            if "ecer" in pesan:
+                tipe = "ecer"
+            if any(x in pesan for x in ["ds", "dus", "pk"]):
+                tipe = "dus"
+
+            data.append({
                 "tanggal": tanggal,
-                "pengirim": pengirim,
-                "pesan_asli": pesan.strip(),
-                "harga_ditemukan": ", ".join(prices),
-                "jumlah_harga": len(prices)
+                "nama_produk": nama_produk.title(),
+                "varian": varian.replace(" ", ""),
+                "tipe_harga": tipe,
+                "harga": int(harga) * 1000
             })
 
     # =========================
-    # OUTPUT PRODUK
+    # LOG CHAT UPDATE HARGA
     # =========================
-    if data:
-        df = (
-            pd.DataFrame(data)
-            .drop_duplicates()
-            .sort_values("tanggal", ascending=False)
-            .reset_index(drop=True)
+    log_data = []
+
+    for line in lines:
+        if "rb" not in line.lower():
+            continue
+
+        if " - " not in line or ":" not in line:
+            continue
+
+        date_match = re.search(r'(\d{2}/\d{2}/\d{2})', line)
+        if not date_match:
+            continue
+
+        tanggal = datetime.strptime(
+            date_match.group(1), "%d/%m/%y"
+        ).date()
+
+        header, pesan = line.split(":", 1)
+        pengirim = header.split(" - ")[1].strip()
+        pesan_lower = pesan.lower()
+
+        prices = re.findall(r'\d+\s*rb', pesan_lower)
+        indikasi_jual = any(
+            k in pesan_lower for k in ["jual", "harga", "hrg"]
         )
 
-        df["harga_rupiah"] = df["harga"].apply(format_rupiah)
+        if not prices or not indikasi_jual:
+            continue
 
-        st.subheader("📊 Hasil Ekstraksi Produk")
-        st.dataframe(
-            df[[
-                "tanggal",
-                "nama_produk",
-                "varian",
-                "tipe_harga",
-                "harga_rupiah",
-                "harga"
-            ]],
-            use_container_width=True
-        )
+        log_data.append({
+            "tanggal": tanggal,
+            "pengirim": pengirim,
+            "pesan_asli": pesan.strip(),
+            "harga_ditemukan": ", ".join(prices),
+            "jumlah_harga": len(prices)
+        })
 
-        # =========================
-        # EXPORT EXCEL
-        # =========================
-        def to_excel(df_produk, df_log):
-            output = BytesIO()
-            with pd.ExcelWriter(output, engine="openpyxl") as writer:
-                df_produk.to_excel(writer, index=False, sheet_name="Produk")
-                if df_log is not None:
-                    df_log.to_excel(writer, index=False, sheet_name="Log_Chat")
-            return output.getvalue()
+# =========================
+# OUTPUT PRODUK
+# =========================
+if data:
+    df = (
+        pd.DataFrame(data)
+        .drop_duplicates()
+        .sort_values("tanggal", ascending=False)
+        .reset_index(drop=True)
+    )
 
-        df_log_export = pd.DataFrame(log_data) if log_data else None
-        excel_data = to_excel(df, df_log_export)
+    df["harga_rupiah"] = df["harga"].apply(format_rupiah)
 
-        st.download_button(
-            "⬇️ Download Excel",
-            excel_data,
-            "hasil_ekstraksi_barang.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-        )
-        
-        # =========================
-        # AUTO MASTER PRODUK (AMAN)
-        # =========================
-
-        df_base = df.copy()   # <<< INI KUNCI NYAWA
-
-        # MASTER PRODUK
-        df_produk_master = (
-            df_base[["nama_produk"]]
-            .drop_duplicates()
-            .reset_index(drop=True)
-        )
-
-        df_produk_master["produk_id"] = [
-            f"P{str(i+1).zfill(4)}"
-            for i in range(len(df_produk_master))
-        ]
-
-        # MASTER VARIAN
-        df_varian = (
-            df_base[["nama_produk", "varian"]]
-            .drop_duplicates()
-            .reset_index(drop=True)
-        )
-
-        df_varian = df_varian.merge(
-            df_produk_master,
-            on="nama_produk",
-            how="left"
-        )
-
-        df_varian["varian_id"] = [
-            f"V{str(i+1).zfill(5)}"
-            for i in range(len(df_varian))
-        ]
-
-        # HISTORI HARGA
-        df_harga = df_base.merge(
-            df_varian,
-            on=["nama_produk", "varian"],
-            how="left"
-        )
-
-        df_harga = df_harga[[
-            "varian_id",
+    st.subheader("📊 Hasil Ekstraksi Produk")
+    st.dataframe(
+        df[[
+            "tanggal",
+            "nama_produk",
+            "varian",
             "tipe_harga",
-            "harga",
-            "tanggal"
-        ]].drop_duplicates()
+            "harga_rupiah",
+            "harga"
+        ]],
+        use_container_width=True
+    )
 
-        df_harga["harga_id"] = [
-            f"H{str(i+1).zfill(6)}"
-            for i in range(len(df_harga))
-        ]
+    # =========================
+    # EXPORT EXCEL
+    # =========================
+    def to_excel(df_produk, df_log):
+        output = BytesIO()
+        with pd.ExcelWriter(output, engine="openpyxl") as writer:
+            df_produk.to_excel(writer, index=False, sheet_name="Produk")
+            if df_log is not None:
+                df_log.to_excel(writer, index=False, sheet_name="Log_Chat")
+        return output.getvalue()
+
+    df_log_export = pd.DataFrame(log_data) if log_data else None
+    excel_data = to_excel(df, df_log_export)
+
+    st.download_button(
+        "⬇️ Download Excel",
+        excel_data,
+        "hasil_ekstraksi_barang.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
+    
+    # =========================
+    # AUTO MASTER PRODUK (AMAN)
+    # =========================
+
+    df_base = df.copy()   # <<< INI KUNCI NYAWA
+
+    # MASTER PRODUK
+    df_produk_master = (
+        df_base[["nama_produk"]]
+        .drop_duplicates()
+        .reset_index(drop=True)
+    )
+
+    df_produk_master["produk_id"] = [
+        f"P{str(i+1).zfill(4)}"
+        for i in range(len(df_produk_master))
+    ]
+
+    # MASTER VARIAN
+    df_varian = (
+        df_base[["nama_produk", "varian"]]
+        .drop_duplicates()
+        .reset_index(drop=True)
+    )
+
+    df_varian = df_varian.merge(
+        df_produk_master,
+        on="nama_produk",
+        how="left"
+    )
+
+    df_varian["varian_id"] = [
+        f"V{str(i+1).zfill(5)}"
+        for i in range(len(df_varian))
+    ]
+
+    # HISTORI HARGA
+    df_harga = df_base.merge(
+        df_varian,
+        on=["nama_produk", "varian"],
+        how="left"
+    )
+
+    df_harga = df_harga[[
+        "varian_id",
+        "tipe_harga",
+        "harga",
+        "tanggal"
+    ]].drop_duplicates()
+
+    df_harga["harga_id"] = [
+        f"H{str(i+1).zfill(6)}"
+        for i in range(len(df_harga))
+    ]
 
 
-        with st.expander("📦 Master Produk (Auto)"):
-            st.dataframe(df_produk_master, use_container_width=True)
+    with st.expander("📦 Master Produk (Auto)"):
+        st.dataframe(df_produk_master, use_container_width=True)
 
-        with st.expander("📐 Varian Produk"):
-            st.dataframe(df_varian, use_container_width=True)
+    with st.expander("📐 Varian Produk"):
+        st.dataframe(df_varian, use_container_width=True)
 
-        with st.expander("💰 Histori Harga"):
-            st.dataframe(df_harga, use_container_width=True)
-            
-        def to_excel(df_produk):
-            output = BytesIO()
-            with pd.ExcelWriter(output, engine="openpyxl") as writer:
-                df_produk.to_excel(writer, index=False, sheet_name="Produk")
-                df_produk_master.to_excel(writer, index=False, sheet_name="Produk_Master")
-                df_varian.to_excel(writer, index=False, sheet_name="Produk_Varian")
-                df_harga.to_excel(writer, index=False, sheet_name="Harga_Produk")
-
-            return output.getvalue()
-
+    with st.expander("💰 Histori Harga"):
+        st.dataframe(df_harga, use_container_width=True)
         
+    def to_excel(df_produk):
+        output = BytesIO()
+        with pd.ExcelWriter(output, engine="openpyxl") as writer:
+            df_produk.to_excel(writer, index=False, sheet_name="Produk")
+            df_produk_master.to_excel(writer, index=False, sheet_name="Produk_Master")
+            df_varian.to_excel(writer, index=False, sheet_name="Produk_Varian")
+            df_harga.to_excel(writer, index=False, sheet_name="Harga_Produk")
 
-    # =========================
-    # OUTPUT LOG CHAT
-    # =========================
-    if log_data:
-        df_log = (
-            pd.DataFrame(log_data)
-            .drop_duplicates()
-            .sort_values("tanggal", ascending=False)
-            .reset_index(drop=True)
-        )
-
-        # =========================
-        # NAMA PRODUK DARI CHAT
-        # =========================
-        df_log["nama_produk"] = df_log["pesan_asli"].apply(
-            extract_nama_produk_log
-        )
-
-        # =========================
-        # PRODUK UNIK + TANGGAL TERAKHIR
-        # =========================
-        df_produk_terakhir = (
-            df_log
-            .sort_values("tanggal", ascending=False)
-            .drop_duplicates(subset=["nama_produk"])
-            .reset_index(drop=True)
-        )
-
-        # =========================
-        # TAMPILKAN
-        # =========================
-        st.subheader("📌 Produk Unik (Harga Terakhir)")
-        st.metric(
-            "Total Produk Unik",
-            df_produk_terakhir["nama_produk"].nunique()
-        )
-
-        st.dataframe(
-            df_produk_terakhir[
-                ["tanggal", "nama_produk", "pesan_asli", "harga_ditemukan"]
-            ],
-            use_container_width=True
-        )
-
-        # =========================
-        # LOG FULL (OPTIONAL)
-        # =========================
-        st.subheader("🧾 Log Chat Update Harga (Full)")
-        st.metric("Total Log Chat", len(df_log))
-        st.dataframe(df_log, use_container_width=True)
+        return output.getvalue()
 
     
-    if not data and not log_data:
-        st.warning("⚠️ Tidak ditemukan data harga di chat.")
+
+# =========================
+# OUTPUT LOG CHAT
+# =========================
+if log_data:
+    df_log = (
+        pd.DataFrame(log_data)
+        .drop_duplicates()
+        .sort_values("tanggal", ascending=False)
+        .reset_index(drop=True)
+    )
+
+    # =========================
+    # NAMA PRODUK DARI CHAT
+    # =========================
+    df_log["nama_produk"] = df_log["pesan_asli"].apply(
+        extract_nama_produk_log
+    )
+
+    # =========================
+    # PRODUK UNIK + TANGGAL TERAKHIR
+    # =========================
+    df_produk_terakhir = (
+        df_log
+        .sort_values("tanggal", ascending=False)
+        .drop_duplicates(subset=["nama_produk"])
+        .reset_index(drop=True)
+    )
+
+    # =========================
+    # TAMPILKAN
+    # =========================
+    st.subheader("📌 Produk Unik (Harga Terakhir)")
+    st.metric(
+        "Total Produk Unik",
+        df_produk_terakhir["nama_produk"].nunique()
+    )
+
+    st.dataframe(
+        df_produk_terakhir[
+            ["tanggal", "nama_produk", "pesan_asli", "harga_ditemukan"]
+        ],
+        use_container_width=True
+    )
+
+    # =========================
+    # LOG FULL (OPTIONAL)
+    # =========================
+    st.subheader("🧾 Log Chat Update Harga (Full)")
+    st.metric("Total Log Chat", len(df_log))
+    st.dataframe(df_log, use_container_width=True)
+
+
+if not data and not log_data:
+    st.warning("⚠️ Tidak ditemukan data harga di chat.")

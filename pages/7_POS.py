@@ -63,6 +63,10 @@ df_pos = (
     .merge(df_produk, on=["produk_id", "nama_produk"], how="left")
     .merge(df_harga_last, on="varian_id", how="left")
 )
+if st.button("🔄 Clear Cache & Reload"):
+    st.cache_data.clear()
+    st.cache_resource.clear()
+    st.rerun()
 
 # =========================
 # FILTER

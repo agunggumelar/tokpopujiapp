@@ -3,6 +3,7 @@ import pandas as pd
 from datetime import date
 from gsheet import read_sheet, append_sheet
 
+    
 def generate_next_id(df, col, prefix, pad):
     if df.empty or col not in df.columns:
         return f"{prefix}{'1'.zfill(pad)}"
@@ -17,6 +18,7 @@ def generate_next_id(df, col, prefix, pad):
     )
 
     return f"{prefix}{str(last_num + 1).zfill(pad)}"
+
 
 # =========================
 # CONFIG
@@ -218,13 +220,66 @@ if not df_produk.empty and not df_varian.empty and not df_harga.empty:
         .reset_index(drop=True)
     )
 
+    # st.metric(
+    #     "Total Produk",
+    #     df_merge["produk_id"].nunique()
+    # )
+
+    # st.dataframe(
+    #     df_merge[[
+    #         "produk_id",
+    #         "nama_produk",
+    #         "kategori",
+    #         "varian",
+    #         "tipe_harga",
+    #         "harga",
+    #         "tanggal"
+    #     ]],
+    #     use_container_width=True
+    # )
+    
+    # =========================
+    # FILTER DATA
+    # =========================
+    st.markdown("### 🔎 Filter Data")
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+        keyword_produk = st.text_input(
+            "Cari Nama Produk",
+            placeholder="Ketik sebagian nama produk..."
+        )
+
+    with col2:
+        filter_kategori = st.multiselect(
+            "Kategori",
+            options=sorted(df_merge["kategori"].dropna().unique()),
+            placeholder="Pilih kategori"
+        )
+
+    df_filtered = df_merge.copy()
+
+    # Filter nama produk (contains, case-insensitive)
+    if keyword_produk.strip():
+        df_filtered = df_filtered[
+            df_filtered["nama_produk"]
+            .str.contains(keyword_produk, case=False, na=False)
+        ]
+
+    # Filter kategori
+    if filter_kategori:
+        df_filtered = df_filtered[
+            df_filtered["kategori"].isin(filter_kategori)
+        ]
+
     st.metric(
         "Total Produk",
-        df_merge["produk_id"].nunique()
+        df_filtered["produk_id"].nunique()
     )
 
     st.dataframe(
-        df_merge[[
+        df_filtered[[
             "produk_id",
             "nama_produk",
             "kategori",
@@ -235,6 +290,8 @@ if not df_produk.empty and not df_varian.empty and not df_harga.empty:
         ]],
         use_container_width=True
     )
+
+
 
 else:
     st.warning("⚠️ Data belum lengkap (produk / varian / harga).")
